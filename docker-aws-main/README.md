@@ -1,20 +1,20 @@
-# Realtime Collaborative Code Analytics
+# Collaborative LaTeX Editor with Analytics
 
-A dockerized realtime JavaScript coding platform with Monaco, Yjs collaboration, Socket.IO presence, live cursor tracking, project/file navigation, inline comments, basic version history, execution logs, runtime metrics, data-output analysis, charts, exports, and collaboration analytics.
+A dockerized real-time collaborative LaTeX editor using React, Monaco, Yjs, Socket.IO, and an Express backend.
 
-## What It Runs
+## Features
 
-- Code execution currently supports JavaScript.
-- JavaScript runs on the backend inside a timed Node worker.
-- The editor can collaborate across multiple files in a selected demo project.
+- Real-time multi-user LaTeX editing with CRDT sync.
+- Presence tracking with live cursor line/column updates.
+- LaTeX syntax highlighting in Monaco.
+- Minimal paper-style live preview.
+- Compile feedback with LaTeX diagnostics for common structure, brace, environment, and citation issues.
+- Snapshot history and rollback.
+- Unified analytics dashboard for document health, progress, readability, citations, figures/tables, build trends, revisions, and collaboration.
 
-## Demo Projects
+## Scope
 
-- Retail Sales Insights: sales, orders, returns, and channel conversion data.
-- IoT Energy Monitor: sensor readings, CSV-like logs, and anomaly-friendly spikes.
-- Student Performance Lab: attendance, study-hours, scores, and a deliberate error example.
-
-Open the Analytics button after running code to view execution metrics, output analysis, error logs, collaboration behavior, version changes, and performance trends.
+This project does not run a full TeX engine. The preview is an in-app paper preview, and compile feedback is produced by a lightweight LaTeX validator. A full PDF compiler can be added later by installing TeX Live in the Docker image and calling `pdflatex` or `latexmk`.
 
 ## Run with Docker
 
@@ -28,9 +28,9 @@ Open:
 http://localhost:3000
 ```
 
-Use different browser tabs with different names and the same room name to test collaboration.
+Use two browser tabs with different names and the same room to demo collaboration.
 
-## Run locally for development
+## Run Locally
 
 Terminal 1:
 
@@ -48,14 +48,8 @@ npm install
 npm run dev
 ```
 
-Open the Vite URL, usually:
+Open:
 
 ```text
 http://localhost:5173
 ```
-
-## Notes
-
-- Code execution is JavaScript-only and runs inside a timed Node worker.
-- Room state, project files, comments, history, runs, and analytics are stored in memory for this project version.
-- The production Docker image builds the frontend and serves it from the backend on port `3000`.

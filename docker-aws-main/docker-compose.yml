@@ -1,13 +1,12 @@
 services:
-  collaborative-editor:
+  latex-editor:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: collaborative-code-analytics
+    container_name: collaborative-latex-analytics
     environment:
       NODE_ENV: production
       PORT: 3000
-      EXECUTION_TIMEOUT_MS: 2500
     ports:
       - "3000:3000"
     restart: unless-stopped

@@ -1,206 +1,104 @@
 import "./App.css"
 import { Editor } from "@monaco-editor/react"
 import { MonacoBinding } from "y-monaco"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import * as Y from "yjs"
 import { SocketIOProvider } from "y-socket.io"
 import { io } from "socket.io-client"
 
-const DEMO_PROJECTS = [
-  {
-    id: "sales-insights",
-    name: "Retail Sales Insights",
-    description: "Sales, channels, returns, and conversion metrics.",
-    files: [
-      {
-        id: "sales-main",
-        path: "src/sales-analysis.js",
-        language: "javascript",
-        content: `const sales = [
-  { month: "Jan", revenue: 42000, orders: 310, returns: 14 },
-  { month: "Feb", revenue: 48000, orders: 355, returns: 18 },
-  { month: "Mar", revenue: 61000, orders: 420, returns: 20 },
-  { month: "Apr", revenue: 77000, orders: 515, returns: 22 },
-  { month: "May", revenue: 73000, orders: 498, returns: 27 },
-  { month: "Jun", revenue: 91000, orders: 640, returns: 34 }
-]
+const STARTER_LATEX = String.raw`\documentclass{article}
+\title{Collaborative LaTeX Analytics}
+\author{Research Team}
+\date{\today}
 
-console.log(JSON.stringify(sales, null, 2))
-return sales`
-      },
-      {
-        id: "sales-utils",
-        path: "src/channel-summary.js",
-        language: "javascript",
-        content: `const channels = [
-  { channel: "Search", sessions: 1450, conversion: 5.8 },
-  { channel: "Social", sessions: 980, conversion: 3.4 },
-  { channel: "Email", sessions: 760, conversion: 8.1 },
-  { channel: "Referral", sessions: 430, conversion: 4.9 }
-]
+\begin{document}
+\maketitle
 
-console.log(JSON.stringify(channels, null, 2))
-return channels`
-      }
-    ]
-  },
-  {
-    id: "iot-energy",
-    name: "IoT Energy Monitor",
-    description: "Sensor streams with spikes for anomaly detection.",
-    files: [
-      {
-        id: "iot-stream",
-        path: "analytics/sensor-stream.js",
-        language: "javascript",
-        content: `const readings = [
-  { minute: 0, temperature: 31.2, watts: 180, vibration: 0.04 },
-  { minute: 5, temperature: 31.9, watts: 184, vibration: 0.05 },
-  { minute: 10, temperature: 32.4, watts: 188, vibration: 0.05 },
-  { minute: 15, temperature: 35.8, watts: 240, vibration: 0.12 },
-  { minute: 20, temperature: 33.1, watts: 191, vibration: 0.06 },
-  { minute: 25, temperature: 33.4, watts: 195, vibration: 0.05 }
-]
+\begin{abstract}
+This paper demonstrates a real-time collaborative LaTeX editor with document analytics, compile feedback, version history, and writing quality insights.
+\end{abstract}
 
-console.log(JSON.stringify(readings, null, 2))
-return readings`
-      },
-      {
-        id: "iot-csv",
-        path: "data/readings.csv.js",
-        language: "javascript",
-        content: `console.log(\`minute,humidity,pressure
-0,42,1011
-5,43,1010
-10,44,1012
-15,61,1004
-20,45,1011\`)
+\section{Introduction}
+Collaborative scientific writing needs fast feedback. Authors need to know whether the document is complete, readable, well-cited, and balanced across sections.
 
-return "CSV output emitted to logs"`
-      }
-    ]
-  },
-  {
-    id: "student-performance",
-    name: "Student Performance Lab",
-    description: "Scores, attendance, study hours, and error demos.",
-    files: [
-      {
-        id: "student-main",
-        path: "notebooks/performance.js",
-        language: "javascript",
-        content: `const students = [
-  { cohort: "A", attendance: 92, studyHours: 14, score: 86 },
-  { cohort: "B", attendance: 81, studyHours: 9, score: 73 },
-  { cohort: "C", attendance: 88, studyHours: 12, score: 80 },
-  { cohort: "D", attendance: 64, studyHours: 4, score: 52 },
-  { cohort: "E", attendance: 95, studyHours: 16, score: 91 }
-]
+\section{Methodology}
+The editor uses conflict-free collaboration for shared editing. The analytics engine tracks writing progress, structure, citations, figures, tables, and compile health.
 
-console.log(JSON.stringify(students, null, 2))
-return students`
-      },
-      {
-        id: "student-errors",
-        path: "experiments/error-case.js",
-        language: "javascript",
-        content: `const scores = [88, 92, 79, 84]
-console.log("Preparing weighted score model")
+\section{Results}
+Table~\ref{tab:metrics} summarizes synthetic document health metrics.
 
-throw new Error("Demo validation failure: weights do not add up to 100")
+\begin{table}[h]
+\centering
+\caption{Document health metrics}
+\label{tab:metrics}
+\begin{tabular}{lr}
+Metric & Value \\
+Word count & 1320 \\
+Citation density & 0.08 \\
+\end{tabular}
+\end{table}
 
-return scores`
-      }
-    ]
-  }
-]
+\section{Conclusion}
+The system gives authors a compact view of quality, progress, collaboration, and LaTeX build health.
 
-const USER_COLORS = ["#22c55e", "#38bdf8", "#f59e0b", "#f43f5e", "#a78bfa", "#14b8a6"]
+\bibliographystyle{plain}
+\begin{thebibliography}{9}
+\bibitem{lamport} Leslie Lamport. LaTeX: A Document Preparation System.
+\end{thebibliography}
 
-function readInitialQuery() {
+\end{document}`
+
+const COLORS = ["#2563eb", "#059669", "#d97706", "#dc2626", "#7c3aed", "#0891b2"]
+
+function initialQuery() {
   const query = new URLSearchParams(window.location.search)
   return {
     username: query.get("username") || "",
-    roomId: query.get("room") || "sales-demo",
-    projectId: query.get("project") || DEMO_PROJECTS[0].id
+    roomId: query.get("room") || "paper-demo"
   }
 }
 
-function getServerUrl() {
+function userColor(name) {
+  const total = Array.from(name || "Guest").reduce((sum, char) => sum + char.charCodeAt(0), 0)
+  return COLORS[total % COLORS.length]
+}
+
+function serverUrl() {
   return import.meta.env.VITE_SERVER_URL || window.location.origin
 }
 
-function pickColor(name) {
-  const total = Array.from(name || "Guest").reduce((sum, char) => sum + char.charCodeAt(0), 0)
-  return USER_COLORS[total % USER_COLORS.length]
-}
-
 function App() {
-  const initialQuery = useMemo(readInitialQuery, [])
-  const [username, setUsername] = useState(initialQuery.username)
-  const [roomId, setRoomId] = useState(initialQuery.roomId)
-  const [projectId, setProjectId] = useState(initialQuery.projectId)
-  const [activeFileId, setActiveFileId] = useState(DEMO_PROJECTS[0].files[0].id)
-  const [files, setFiles] = useState(DEMO_PROJECTS[0].files)
+  const query = useMemo(initialQuery, [])
+  const [username, setUsername] = useState(query.username)
+  const [roomId, setRoomId] = useState(query.roomId)
   const [users, setUsers] = useState([])
-  const [comments, setComments] = useState([])
-  const [history, setHistory] = useState([])
   const [analytics, setAnalytics] = useState(null)
-  const [runResult, setRunResult] = useState(null)
-  const [commentText, setCommentText] = useState("")
-  const [commentLine, setCommentLine] = useState(1)
-  const [connectionStatus, setConnectionStatus] = useState("idle")
+  const [history, setHistory] = useState([])
+  const [compileResult, setCompileResult] = useState(null)
   const [dashboardOpen, setDashboardOpen] = useState(false)
-  const [dashboardTab, setDashboardTab] = useState("output")
-  const [editorReady, setEditorReady] = useState(false)
+  const [status, setStatus] = useState("idle")
+  const [latexValue, setLatexValue] = useState(STARTER_LATEX)
 
   const editorRef = useRef(null)
   const monacoRef = useRef(null)
   const socketRef = useRef(null)
   const bindingRef = useRef(null)
-  const modelDisposablesRef = useRef([])
-  const decorationsRef = useRef([])
+  const seededRef = useRef(false)
   const changeTimerRef = useRef(null)
-  const seededFilesRef = useRef(new Set())
-  const activeFileRef = useRef(null)
-  const activeFileIdRef = useRef(activeFileId)
-  const projectIdRef = useRef(projectId)
 
-  const color = useMemo(() => pickColor(username), [username])
-  const project = useMemo(() => DEMO_PROJECTS.find((item) => item.id === projectId) || DEMO_PROJECTS[0], [projectId])
-  const activeFile = useMemo(
-    () => files.find((file) => file.id === activeFileId) || files[0] || project.files[0],
-    [activeFileId, files, project.files]
-  )
-
-  activeFileRef.current = activeFile
-  activeFileIdRef.current = activeFileId
-  projectIdRef.current = projectId
-
+  const color = useMemo(() => userColor(username), [username])
   const ydoc = useMemo(() => new Y.Doc(), [])
+  const yText = useMemo(() => ydoc.getText("latex"), [ydoc])
   const provider = useMemo(() => {
     if (!username) return null
-
     return new SocketIOProvider(
-      getServerUrl(),
-      `workspace-${roomId}`,
+      serverUrl(),
+      `latex-${roomId}`,
       ydoc,
-      {
-        autoConnect: true,
-        disableBc: false
-      },
-      {
-        transports: ["websocket"]
-      }
+      { autoConnect: true, disableBc: false },
+      { transports: ["websocket"] }
     )
   }, [roomId, username, ydoc])
-
-  useEffect(() => {
-    const nextProject = DEMO_PROJECTS.find((item) => item.id === projectId) || DEMO_PROJECTS[0]
-    setFiles(nextProject.files)
-    setActiveFileId(nextProject.files[0].id)
-    setRunResult(null)
-  }, [projectId])
 
   useEffect(() => {
     if (!provider) return undefined
@@ -211,359 +109,187 @@ function App() {
       color,
       colorLight: `${color}33`
     })
+    provider.on("status", ({ status: nextStatus }) => setStatus(nextStatus))
 
-    provider.on("status", ({ status }) => setConnectionStatus(status))
-
-    return () => {
-      provider.destroy()
-    }
+    return () => provider.destroy()
   }, [color, provider, username])
-
-  const hydrateState = useCallback((state) => {
-    if (state.projectId && state.projectId !== projectIdRef.current) setProjectId(state.projectId)
-    if (state.files?.length) {
-      setFiles(state.files)
-      if (!state.files.some((file) => file.id === activeFileIdRef.current)) setActiveFileId(state.files[0].id)
-    }
-    setUsers(state.users || [])
-    setComments(state.comments || [])
-    setHistory(state.history || [])
-    setAnalytics(state.analytics || null)
-  }, [])
-
-  useEffect(() => {
-    if (!provider || !editorReady || !editorRef.current || !monacoRef.current || !activeFile) return undefined
-
-    bindingRef.current?.destroy?.()
-    const editor = editorRef.current
-    const monaco = monacoRef.current
-    const text = ydoc.getText(`file:${activeFile.id}`)
-    const uri = monaco.Uri.parse(`file:///${roomId}/${activeFile.path}`)
-    let model = monaco.editor.getModel(uri)
-
-    if (!model) {
-      model = monaco.editor.createModel("", activeFile.language || "javascript", uri)
-    }
-
-    if (text.length === 0 && !seededFilesRef.current.has(activeFile.id)) {
-      text.insert(0, activeFile.code || activeFile.content || "")
-      seededFilesRef.current.add(activeFile.id)
-    }
-
-    editor.setModel(model)
-    bindingRef.current = new MonacoBinding(text, model, new Set([editor]), provider.awareness)
-
-    return () => {
-      bindingRef.current?.destroy?.()
-      bindingRef.current = null
-    }
-  }, [activeFile, editorReady, provider, roomId, ydoc])
-
-  useEffect(() => {
-    if (!editorRef.current || !monacoRef.current || !activeFile) return
-
-    decorationsRef.current = editorRef.current.deltaDecorations(
-      decorationsRef.current,
-      comments
-        .filter((comment) => !comment.resolved && comment.fileId === activeFile.id)
-        .map((comment) => ({
-          range: new monacoRef.current.Range(comment.lineNumber, 1, comment.lineNumber, 1),
-          options: {
-            isWholeLine: true,
-            linesDecorationsClassName: "comment-line",
-            glyphMarginClassName: "comment-glyph",
-            hoverMessage: { value: `**${comment.author}**: ${comment.text}` }
-          }
-        }))
-    )
-  }, [activeFile, comments])
 
   useEffect(() => {
     if (!username) return undefined
 
-    const socket = io(getServerUrl(), { transports: ["websocket"] })
+    const socket = io(serverUrl(), { transports: ["websocket"] })
     socketRef.current = socket
-
-    socket.emit("session:join", { roomId, projectId, username, color })
-    socket.on("session:state", hydrateState)
-    socket.on("analytics:update", hydrateState)
+    socket.emit("session:join", { roomId, username, color })
+    socket.on("session:state", (state) => {
+      setUsers(state.users || [])
+      setAnalytics(state.analytics || null)
+      setHistory(state.history || [])
+      if (state.latex && !seededRef.current) setLatexValue(state.latex)
+    })
     socket.on("presence:update", setUsers)
-    socket.on("comments:update", setComments)
-    socket.on("history:update", setHistory)
-    socket.on("run:result", (result) => {
-      setRunResult(result)
-      setDashboardTab(result.status === "error" ? "execution" : "output")
+    socket.on("compile:result", setCompileResult)
+    socket.on("history:rollback", ({ latex }) => {
+      editorRef.current?.setValue(latex)
     })
 
     return () => {
       socket.disconnect()
       socketRef.current = null
     }
-  }, [color, hydrateState, projectId, roomId, username])
+  }, [color, roomId, username])
 
-  function handleJoin(event) {
-    event.preventDefault()
-    const form = new FormData(event.currentTarget)
-    const nextUsername = String(form.get("username") || "").trim()
-    const nextRoom = String(form.get("room") || "demo-room").trim() || "demo-room"
-    const nextProject = String(form.get("project") || DEMO_PROJECTS[0].id)
-    if (!nextUsername) return
-
-    setUsername(nextUsername)
-    setRoomId(nextRoom)
-    setProjectId(nextProject)
-    window.history.pushState(
-      {},
-      "",
-      `?username=${encodeURIComponent(nextUsername)}&room=${encodeURIComponent(nextRoom)}&project=${encodeURIComponent(nextProject)}`
-    )
-  }
-
-  function handleEditorMount(editor, monaco) {
+  function mountEditor(editor, monaco) {
     editorRef.current = editor
     monacoRef.current = monaco
-    setEditorReady(true)
-    setCommentLine(editor.getPosition()?.lineNumber || 1)
 
-    modelDisposablesRef.current.push(
-      editor.onDidChangeCursorPosition((event) => {
-        const cursor = {
-          fileId: activeFileRef.current?.id,
-          path: activeFileRef.current?.path,
-          lineNumber: event.position.lineNumber,
-          column: event.position.column
-        }
-        setCommentLine(cursor.lineNumber)
-        provider?.awareness.setLocalStateField("cursor", cursor)
-        socketRef.current?.emit("cursor:update", { roomId, username, cursor })
-      }),
-      editor.onDidChangeModelContent((event) => {
-        const currentFile = activeFileRef.current
-        if (!socketRef.current || !currentFile) return
+    if (yText.length === 0 && !seededRef.current) {
+      yText.insert(0, latexValue)
+      seededRef.current = true
+    }
 
-        window.clearTimeout(changeTimerRef.current)
-        changeTimerRef.current = window.setTimeout(() => {
-          const charsChanged = event.changes.reduce((sum, change) => sum + change.text.length + change.rangeLength, 0)
-          const linesTouched = event.changes.reduce(
-            (sum, change) => sum + Math.max(1, change.range.endLineNumber - change.range.startLineNumber + 1),
-            0
-          )
+    bindingRef.current = new MonacoBinding(yText, editor.getModel(), new Set([editor]), provider?.awareness)
 
-          socketRef.current.emit("editor:change", {
-            roomId,
-            username,
-            color,
-            fileId: currentFile.id,
-            code: editor.getValue(),
-            change: { charsChanged, linesTouched }
-          })
-        }, 250)
-      })
-    )
-  }
+    editor.onDidChangeCursorPosition((event) => {
+      const cursor = {
+        lineNumber: event.position.lineNumber,
+        column: event.position.column
+      }
+      provider?.awareness.setLocalStateField("cursor", cursor)
+      socketRef.current?.emit("cursor:update", { roomId, cursor })
+    })
 
-  function runCode() {
-    const code = editorRef.current?.getValue() || ""
-    setRunResult({ status: "running", logs: ["Running JavaScript..."], metrics: {} })
-    socketRef.current?.emit("run:code", { roomId, username, fileId: activeFile?.id, code })
-  }
-
-  function saveVersion(label = "Manual save") {
-    socketRef.current?.emit("history:snapshot", {
-      roomId,
-      username,
-      fileId: activeFile?.id,
-      label,
-      code: editorRef.current?.getValue() || ""
+    editor.onDidChangeModelContent((event) => {
+      const latex = editor.getValue()
+      setLatexValue(latex)
+      window.clearTimeout(changeTimerRef.current)
+      changeTimerRef.current = window.setTimeout(() => {
+        const charsChanged = event.changes.reduce((sum, change) => sum + change.text.length + change.rangeLength, 0)
+        const offset = editor.getModel()?.getOffsetAt(editor.getPosition()) || 0
+        socketRef.current?.emit("editor:change", {
+          roomId,
+          username,
+          color,
+          latex,
+          change: { charsChanged, offset }
+        })
+      }, 250)
     })
   }
 
-  function addComment(event) {
+  function join(event) {
     event.preventDefault()
-    const text = commentText.trim()
-    if (!text || !activeFile) return
-
-    socketRef.current?.emit("comments:add", {
-      roomId,
-      username,
-      fileId: activeFile.id,
-      lineNumber: commentLine,
-      text
-    })
-    setCommentText("")
+    const form = new FormData(event.currentTarget)
+    const nextName = String(form.get("username") || "").trim()
+    const nextRoom = String(form.get("room") || "paper-demo").trim() || "paper-demo"
+    if (!nextName) return
+    setUsername(nextName)
+    setRoomId(nextRoom)
+    window.history.pushState({}, "", `?username=${encodeURIComponent(nextName)}&room=${encodeURIComponent(nextRoom)}`)
   }
 
-  function resolveComment(commentId) {
-    socketRef.current?.emit("comments:resolve", { roomId, commentId })
+  function compile() {
+    const latex = editorRef.current?.getValue() || latexValue
+    setCompileResult({ status: "running", diagnostics: [], durationMs: 0 })
+    socketRef.current?.emit("compile:latex", { roomId, username, latex })
   }
 
-  function restoreVersion(version) {
-    if (!version?.code) return
-    setActiveFileId(version.fileId)
-    window.setTimeout(() => {
-      editorRef.current?.setValue(version.code)
-      saveVersion(`Restored ${version.label}`)
-    }, 80)
+  function snapshot() {
+    const latex = editorRef.current?.getValue() || latexValue
+    socketRef.current?.emit("history:snapshot", { roomId, username, latex, label: "Manual snapshot" })
   }
 
-  function exportAnalysis(kind) {
-    const output = analytics?.data
-    if (!output) return
+  function rollback(versionId) {
+    socketRef.current?.emit("history:rollback", { roomId, username, versionId })
+  }
 
-    if (kind === "json") {
-      downloadFile("analysis.json", JSON.stringify(output, null, 2), "application/json")
-    }
-
-    if (kind === "csv") {
-      const csv = toCsv(output.table)
-      downloadFile("analysis.csv", csv, "text/csv")
-    }
-
-    if (kind === "image") {
-      const chart = output.charts?.[0]
-      const svg = chartToSvg(chart)
-      downloadFile("analysis-chart.svg", svg, "image/svg+xml")
-    }
+  function formatLatex() {
+    const formatted = simpleFormat(editorRef.current?.getValue() || latexValue)
+    editorRef.current?.setValue(formatted)
   }
 
   if (!username) {
     return (
       <main className="join-screen">
-        <form className="join-panel" onSubmit={handleJoin}>
+        <form className="join-card" onSubmit={join}>
           <div>
-            <p className="eyebrow">Coding platform demo</p>
-            <h1>Collaborative Code Studio</h1>
-            <p className="join-copy">Pick a project, join a room, code together, then open the analytics dashboard.</p>
+            <p className="eyebrow">Collaborative LaTeX</p>
+            <h1>Write together. Analyze simply.</h1>
+            <p>Minimal LaTeX editor with live preview, compile feedback, history, and document analytics.</p>
           </div>
           <label>
             Name
-            <input name="username" type="text" placeholder="Manas" autoFocus />
+            <input name="username" placeholder="Manas" autoFocus />
           </label>
           <label>
             Room
-            <input name="room" type="text" defaultValue={roomId} />
+            <input name="room" defaultValue={roomId} />
           </label>
-          <label>
-            Demo project
-            <select name="project" defaultValue={projectId}>
-              {DEMO_PROJECTS.map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
-              ))}
-            </select>
-          </label>
-          <button type="submit">Open workspace</button>
+          <button type="submit">Join document</button>
         </form>
       </main>
     )
   }
 
-  const overview = analytics?.overview || {}
-  const data = analytics?.data || {}
-  const execution = analytics?.execution || {}
-  const activeComments = comments.filter((comment) => !comment.resolved && comment.fileId === activeFile?.id)
-
   return (
-    <main className="platform">
+    <main className="app">
       <header className="topbar">
         <div>
-          <p className="eyebrow">{project.name}</p>
-          <h1>{activeFile?.path || "Workspace"}</h1>
+          <p className="eyebrow">Room {roomId}</p>
+          <h1>Collaborative LaTeX Editor</h1>
         </div>
-        <div className="toolbar">
-          <span className={`status-dot ${connectionStatus}`}>{connectionStatus}</span>
-          <button type="button" onClick={runCode}>Run</button>
-          <button type="button" className="secondary" onClick={() => saveVersion()}>Save</button>
-          <button type="button" className="dashboard-button" onClick={() => setDashboardOpen(true)}>Analytics</button>
+        <div className="actions">
+          <span className={`status ${status}`}>{status}</span>
+          <button type="button" onClick={compile}>Compile</button>
+          <button type="button" className="secondary" onClick={formatLatex}>Format</button>
+          <button type="button" className="secondary" onClick={snapshot}>Snapshot</button>
+          <button type="button" className="secondary" onClick={() => setDashboardOpen(true)}>Analytics</button>
         </div>
       </header>
 
-      <section className="studio-grid">
-        <aside className="project-rail">
-          <Panel title="Project">
-            <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
-              {DEMO_PROJECTS.map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
-              ))}
-            </select>
-            <p className="muted">{project.description}</p>
+      <section className="layout">
+        <aside className="sidebar">
+          <Panel title="People">
+            <Presence users={users} />
           </Panel>
-          <Panel title="Files">
-            <div className="file-list">
-              {files.map((file) => (
-                <button
-                  type="button"
-                  className={file.id === activeFile?.id ? "file active" : "file"}
-                  key={file.id}
-                  onClick={() => setActiveFileId(file.id)}
-                >
-                  <span>{file.path}</span>
-                  <small>{file.updatedBy ? `edited by ${file.updatedBy}` : file.language}</small>
-                </button>
-              ))}
-            </div>
+          <Panel title="Structure">
+            <Structure sections={analytics?.structure?.sections || []} />
           </Panel>
-          <Panel title="Presence">
-            <Presence users={users} activeFile={activeFile} />
+          <Panel title="Build">
+            <BuildStatus result={compileResult || analytics?.build?.latest} diagnostics={analytics?.diagnostics || []} />
           </Panel>
         </aside>
 
-        <section className="editor-zone">
-          <div className="editor-shell">
-            <Editor
-              height="100%"
-              defaultLanguage="javascript"
-              theme="vs-dark"
-              onMount={handleEditorMount}
-              options={{
-                minimap: { enabled: false },
-                fontSize: 14,
-                glyphMargin: true,
-                wordWrap: "on",
-                scrollBeyondLastLine: false,
-                automaticLayout: true,
-                padding: { top: 16 }
-              }}
-            />
-          </div>
-          <Console result={runResult || execution.lastRun} />
+        <section className="editor-pane">
+          <Editor
+            height="100%"
+            defaultLanguage="latex"
+            defaultValue={latexValue}
+            theme="vs-dark"
+            onMount={mountEditor}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 14,
+              wordWrap: "on",
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
+              padding: { top: 16 }
+            }}
+          />
         </section>
 
-        <aside className="collab-rail">
-          <Panel title="Inline Comments">
-            <form className="comment-form" onSubmit={addComment}>
-              <label>
-                Line
-                <input type="number" min="1" value={commentLine} onChange={(event) => setCommentLine(Number(event.target.value))} />
-              </label>
-              <textarea value={commentText} onChange={(event) => setCommentText(event.target.value)} placeholder="Add a note for this file" />
-              <button type="submit">Comment</button>
-            </form>
-            <CommentList comments={activeComments} onResolve={resolveComment} />
-          </Panel>
-          <Panel title="Quick Stats">
-            <MetricGrid
-              items={[
-                ["Files", overview.files || files.length],
-                ["Users", overview.activeUsers || users.length],
-                ["Runs", overview.totalRuns || 0],
-                ["Notes", overview.openComments || 0]
-              ]}
-            />
-            <p className="summary">{data.plainEnglish || "Run code to generate output analysis."}</p>
-          </Panel>
-        </aside>
+        <section className="preview-pane">
+          <div className="paper">
+            <LatexPreview latex={latexValue} />
+          </div>
+        </section>
       </section>
 
       {dashboardOpen && (
-        <Dashboard
+        <AnalyticsDashboard
           analytics={analytics}
           history={history}
-          runResult={runResult}
-          tab={dashboardTab}
-          setTab={setDashboardTab}
           onClose={() => setDashboardOpen(false)}
-          onRestore={restoreVersion}
-          onExport={exportAnalysis}
+          onRollback={rollback}
         />
       )}
     </main>
@@ -579,19 +305,16 @@ function Panel({ title, children }) {
   )
 }
 
-function Presence({ users, activeFile }) {
+function Presence({ users }) {
   if (!users.length) return <p className="muted">Only you are here.</p>
-
   return (
-    <div className="presence-list">
+    <div className="people">
       {users.map((user) => (
-        <div className="presence-row" key={user.socketId || user.username}>
-          <span className="avatar" style={{ background: user.color || pickColor(user.username) }}>{user.username?.slice(0, 1).toUpperCase()}</span>
+        <div className="person" key={user.socketId || user.username}>
+          <span style={{ background: user.color }}>{user.username?.[0]?.toUpperCase()}</span>
           <div>
             <strong>{user.username}</strong>
-            <span>
-              {user.cursor?.fileId === activeFile?.id ? `Line ${user.cursor.lineNumber}, Col ${user.cursor.column}` : user.cursor?.path || "Active"}
-            </span>
+            <small>{user.cursor ? `Line ${user.cursor.lineNumber}, Col ${user.cursor.column}` : "Active"}</small>
           </div>
         </div>
       ))}
@@ -599,238 +322,188 @@ function Presence({ users, activeFile }) {
   )
 }
 
-function CommentList({ comments, onResolve }) {
-  if (!comments.length) return <p className="muted">No open comments for this file.</p>
-
+function Structure({ sections }) {
+  if (!sections.length) return <p className="muted">No sections found.</p>
   return (
-    <div className="comment-list">
-      {comments.map((comment) => (
-        <article className="comment-item" key={comment.id}>
-          <div>
-            <strong>Line {comment.lineNumber}</strong>
-            <span>{comment.author}</span>
-          </div>
-          <p>{comment.text}</p>
-          <button type="button" onClick={() => onResolve(comment.id)}>Resolve</button>
-        </article>
+    <div className="structure">
+      {sections.map((section) => (
+        <a key={`${section.title}-${section.start}`} href={`#${slug(section.title)}`}>
+          <span>{section.title}</span>
+          <small>{section.words} words</small>
+        </a>
       ))}
     </div>
   )
 }
 
-function MetricGrid({ items }) {
+function BuildStatus({ result, diagnostics }) {
+  const current = result || { status: diagnostics.some((item) => item.type === "error") ? "error" : "success" }
   return (
-    <div className="metric-grid">
-      {items.map(([label, value]) => (
-        <div className="metric" key={label}>
-          <span>{label}</span>
-          <strong>{value}</strong>
-        </div>
+    <div className="build">
+      <strong className={current.status}>{current.status || "idle"}</strong>
+      {current.durationMs ? <small>{current.durationMs} ms</small> : null}
+      <div className="diagnostics">
+        {(current.diagnostics || diagnostics).slice(0, 4).map((item, index) => (
+          <p key={`${item.message}-${index}`} className={item.type}>{item.message}</p>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function LatexPreview({ latex }) {
+  const document = extractDocument(latex)
+  const title = matchOne(latex, /\\title\{([^}]+)\}/) || "Untitled Document"
+  const author = matchOne(latex, /\\author\{([^}]+)\}/) || ""
+  const abstract = matchOne(latex, /\\begin\{abstract\}([\s\S]*?)\\end\{abstract\}/)
+  const sections = parsePreviewSections(document)
+
+  return (
+    <>
+      <h1>{title}</h1>
+      {author && <p className="author">{author}</p>}
+      {abstract && (
+        <section className="abstract">
+          <h2>Abstract</h2>
+          <p>{cleanInline(abstract)}</p>
+        </section>
+      )}
+      {sections.map((section) => (
+        <section key={section.title} id={slug(section.title)}>
+          <h2>{section.title}</h2>
+          {section.body.map((paragraph, index) => (
+            <p key={index}>{cleanInline(paragraph)}</p>
+          ))}
+        </section>
       ))}
-    </div>
+    </>
   )
 }
 
-function Console({ result }) {
-  if (!result) return <pre className="console">No run output yet.</pre>
-  if (result.status === "running") return <pre className="console">Running JavaScript...</pre>
+function AnalyticsDashboard({ analytics, history, onClose, onRollback }) {
+  if (!analytics) return null
+  const overview = analytics.overview || {}
+  const readability = analytics.readability || {}
+  const build = analytics.build || {}
+  const collaboration = analytics.collaboration || {}
+  const data = analytics.dataAnalysis || {}
+  const tables = data.tables || {}
+  const distributions = data.distributions || {}
+
+  function exportDashboard() {
+    const blob = new Blob([JSON.stringify(analytics, null, 2)], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "latex-analytics.json"
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
-    <div className="console-wrap">
-      <div className={`run-status ${result.status}`}>{result.status}</div>
-      <pre className="console">{(result.logs || []).join("\n") || JSON.stringify(result.result, null, 2) || "No output"}</pre>
-      {result.error && <pre className="console error">{result.error}</pre>}
-    </div>
-  )
-}
-
-function Dashboard({ analytics, history, runResult, tab, setTab, onClose, onRestore, onExport }) {
-  const data = analytics?.data || {}
-  const execution = analytics?.execution || {}
-  const overview = analytics?.overview || {}
-  const contributions = analytics?.contributions || []
-  const versionChanges = analytics?.versionChanges || []
-  const tabs = ["output", "execution", "collaboration", "versions"]
-
-  return (
-    <section className="dashboard-overlay">
+    <section className="modal">
       <div className="dashboard">
-        <header className="dashboard-header">
+        <header>
           <div>
-            <p className="eyebrow">Analytics dashboard</p>
-            <h2>Code, runtime, output, errors, collaboration, and versions</h2>
+            <p className="eyebrow">Unified Analytics</p>
+            <h2>Document data analysis</h2>
           </div>
-          <button type="button" className="secondary" onClick={onClose}>Close</button>
+          <div className="modal-actions">
+            <button type="button" className="secondary" onClick={exportDashboard}>Export JSON</button>
+            <button type="button" className="secondary" onClick={onClose}>Close</button>
+          </div>
         </header>
 
-        <nav className="dashboard-tabs">
-          {tabs.map((item) => (
-            <button type="button" className={tab === item ? "active" : ""} key={item} onClick={() => setTab(item)}>
-              {item}
-            </button>
-          ))}
-        </nav>
+        <div className="metric-grid">
+          <Metric label="Health score" value={data.healthScore || 0} />
+          <Metric label="Words" value={overview.words || 0} />
+          <Metric label="Compile success" value={`${build.successRate ?? 100}%`} />
+          <Metric label="Clarity score" value={readability.score || 0} />
+        </div>
 
-        {tab === "output" && (
-          <div className="dashboard-grid">
-            <Panel title="Auto Summary">
-              <p className="summary">{data.plainEnglish || "Run code to analyze structured output."}</p>
-              <MetricGrid
-                items={[
-                  ["Rows", data.table?.rows?.length || 0],
-                  ["Columns", data.table?.columns?.length || 0],
-                  ["Stats", data.stats?.length || 0],
-                  ["Anomalies", data.anomalies?.length || 0]
-                ]}
-              />
-              <div className="export-row">
-                <button type="button" onClick={() => onExport("csv")}>CSV</button>
-                <button type="button" onClick={() => onExport("json")}>JSON</button>
-                <button type="button" onClick={() => onExport("image")}>Image</button>
-              </div>
-            </Panel>
-            <Panel title="Suggested Charts">
-              <ChartGallery charts={data.charts || []} />
-            </Panel>
-            <Panel title="Structured Preview">
-              <DataTable table={data.table} anomalies={data.anomalies || []} />
-            </Panel>
-            <Panel title="Statistics & Trends">
-              <StatsList stats={data.stats || []} trends={data.trends || []} />
-            </Panel>
-          </div>
-        )}
+        <section className="analysis-summary">
+          <strong>Auto summary</strong>
+          <p>{data.summary || "Start writing or compiling to generate analytics."}</p>
+        </section>
 
-        {tab === "execution" && (
-          <div className="dashboard-grid">
-            <Panel title="Runtime Metrics">
-              <MetricGrid
-                items={[
-                  ["Runs", overview.totalRuns || 0],
-                  ["Avg time", `${execution.avgDurationMs || 0} ms`],
-                  ["Avg CPU", `${execution.avgCpuMs || 0} ms`],
-                  ["Error rate", `${execution.errorRate || 0}%`]
-                ]}
-              />
-              <TrendChart trend={execution.performanceTrend || []} />
-            </Panel>
-            <Panel title="Logs & Errors">
-              <Console result={runResult || execution.lastRun} />
-            </Panel>
-            <Panel title="Bottlenecks">
-              <ul className="suggestions">
-                {(execution.bottlenecks || []).map((item) => <li key={item}>{item}</li>)}
-              </ul>
-            </Panel>
-          </div>
-        )}
-
-        {tab === "collaboration" && (
-          <div className="dashboard-grid">
-            <Panel title="Contribution Split">
-              <ContributionBars users={contributions} />
-            </Panel>
-            <Panel title="Collaboration Metrics">
-              <MetricGrid
-                items={[
-                  ["Active users", overview.activeUsers || 0],
-                  ["Total edits", overview.totalEdits || 0],
-                  ["Changed chars", overview.totalChars || 0],
-                  ["Open comments", overview.openComments || 0]
-                ]}
-              />
-            </Panel>
-          </div>
-        )}
-
-        {tab === "versions" && (
-          <div className="dashboard-grid">
-            <Panel title="Version Changes">
-              <VersionChanges changes={versionChanges} />
-            </Panel>
-            <Panel title="History">
-              <HistoryList history={history} onRestore={onRestore} />
-            </Panel>
-          </div>
-        )}
+        <div className="dashboard-grid">
+          <Panel title="Section Dataset">
+            <DataTable
+              columns={["section", "words", "citations", "citationDensity", "visuals", "status"]}
+              rows={tables.sections || []}
+            />
+          </Panel>
+          <Panel title="Section Word Distribution">
+            <MiniBars data={distributions.sectionWords || []} />
+          </Panel>
+          <Panel title="Readability Distribution">
+            <div className="split-charts">
+              <MiniBars title="Sentence length" data={distributions.sentenceLengths || []} />
+              <MiniBars title="Paragraph length" data={distributions.paragraphLengths || []} />
+            </div>
+          </Panel>
+          <Panel title="Citation & Visual Density">
+            <div className="split-charts">
+              <MiniBars title="Citation density" data={distributions.citationDensity || []} />
+              <MiniBars title="Visual density" data={distributions.visualDensity || []} />
+            </div>
+          </Panel>
+          <Panel title="Anomalies">
+            <AnomalyList anomalies={data.anomalies || []} />
+          </Panel>
+          <Panel title="Recommendations">
+            <ul className="facts">
+              {(data.recommendations || []).map((item) => <li key={item}>{item}</li>)}
+            </ul>
+          </Panel>
+          <Panel title="Build/Error Dataset">
+            <DataTable columns={["build", "status", "durationMs", "errors", "warnings"]} rows={tables.builds || []} />
+          </Panel>
+          <Panel title="Collaboration Activity">
+            <ActivityHeatmap rows={tables.activity || []} />
+          </Panel>
+          <Panel title="Progress">
+            <Progress analytics={analytics} />
+          </Panel>
+          <Panel title="Readability">
+            <ul className="facts">
+              <li>Avg sentence: {readability.avgSentenceWords || 0} words</li>
+              <li>Paragraph density: {readability.paragraphDensity || "balanced"}</li>
+              <li>Long sentences: {readability.longSentences || 0}</li>
+            </ul>
+          </Panel>
+          <Panel title="Citations & Visuals">
+            <ul className="facts">
+              <li>Citations: {analytics.citations?.total || 0}</li>
+              <li>Bibliography completeness: {analytics.citations?.bibliographyCompleteness ?? 100}%</li>
+              <li>Figures: {analytics.visuals?.figures || 0}</li>
+              <li>Tables: {analytics.visuals?.tables || 0}</li>
+            </ul>
+          </Panel>
+          <Panel title="Collaboration">
+            <Contributors contributors={collaboration.contributors || []} />
+          </Panel>
+          <Panel title="Versions">
+            <History history={history} onRollback={onRollback} />
+          </Panel>
+        </div>
       </div>
     </section>
   )
 }
 
-function ChartGallery({ charts }) {
-  if (!charts.length) return <p className="muted">No chartable output yet.</p>
-  return <div className="chart-gallery">{charts.slice(0, 5).map((chart) => <MiniChart chart={chart} key={`${chart.type}-${chart.title}`} />)}</div>
-}
-
-function MiniChart({ chart }) {
-  if (chart.type === "scatter") return <ScatterChart chart={chart} />
-  if (chart.type === "pie") return <PieChart chart={chart} />
-  return <BarLineChart chart={chart} />
-}
-
-function BarLineChart({ chart }) {
-  const values = chart.data.map((point) => Number(point.value)).filter(Number.isFinite)
-  const max = Math.max(...values, 1)
+function DataTable({ columns, rows }) {
+  if (!rows.length) return <p className="muted">No data rows yet.</p>
   return (
-    <article className="chart-card">
-      <strong>{chart.title}</strong>
-      <div className={`bars ${chart.type}`}>
-        {chart.data.map((point, index) => (
-          <span key={`${point.label}-${index}`} title={`${point.label}: ${point.value}`} style={{ height: `${Math.max(8, (Number(point.value) / max) * 100)}%` }} />
-        ))}
-      </div>
-      <small>{chart.type}</small>
-    </article>
-  )
-}
-
-function ScatterChart({ chart }) {
-  const xs = chart.data.map((point) => point.x).filter(Number.isFinite)
-  const ys = chart.data.map((point) => point.y).filter(Number.isFinite)
-  const maxX = Math.max(...xs, 1)
-  const maxY = Math.max(...ys, 1)
-  return (
-    <article className="chart-card">
-      <strong>{chart.title}</strong>
-      <div className="scatter">
-        {chart.data.map((point, index) => (
-          <span key={index} style={{ left: `${(point.x / maxX) * 92}%`, bottom: `${(point.y / maxY) * 88}%` }} />
-        ))}
-      </div>
-      <small>scatter</small>
-    </article>
-  )
-}
-
-function PieChart({ chart }) {
-  const total = chart.data.reduce((sum, item) => sum + Number(item.value || 0), 0) || 1
-  const first = chart.data[0]?.value || 0
-  const percent = Math.round((first / total) * 100)
-  return (
-    <article className="chart-card">
-      <strong>{chart.title}</strong>
-      <div className="pie" style={{ "--slice": `${percent}%` }} />
-      <small>pie preview</small>
-    </article>
-  )
-}
-
-function DataTable({ table, anomalies }) {
-  if (!table?.rows?.length) return <p className="muted">No structured table detected.</p>
-  const anomalyKeys = new Set(anomalies.map((item) => `${item.row}-${item.field}`))
-  return (
-    <div className="data-table-wrap">
-      <table className="data-table">
+    <div className="table-wrap">
+      <table className="analysis-table">
         <thead>
-          <tr>{table.columns.map((column) => <th key={column}>{column}</th>)}</tr>
+          <tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr>
         </thead>
         <tbody>
-          {table.rows.slice(0, 12).map((row, rowIndex) => (
-            <tr key={rowIndex}>
-              {table.columns.map((column) => (
-                <td className={anomalyKeys.has(`${rowIndex + 1}-${column}`) ? "anomaly" : ""} key={column}>{String(row[column])}</td>
-              ))}
+          {rows.slice(0, 12).map((row, index) => (
+            <tr key={index}>
+              {columns.map((column) => <td key={column}>{String(row[column] ?? "")}</td>)}
             </tr>
           ))}
         </tbody>
@@ -839,110 +512,172 @@ function DataTable({ table, anomalies }) {
   )
 }
 
-function StatsList({ stats, trends }) {
-  if (!stats.length) return <p className="muted">No numeric stats yet.</p>
+function MiniBars({ data, title }) {
+  if (!data.length) return <p className="muted">No chart data yet.</p>
+  const max = Math.max(...data.map((item) => Number(item.value || 0)), 1)
   return (
-    <div className="stats-list">
-      {stats.map((stat) => {
-        const trend = trends.find((item) => item.field === stat.field)
-        return (
-          <div className="stat-row" key={stat.field}>
-            <strong>{stat.field}</strong>
-            <span>mean {stat.mean} | median {stat.median} | min {stat.min} | max {stat.max}</span>
-            {trend && <small>{trend.direction} ({trend.changePercent}%)</small>}
-          </div>
-        )
-      })}
+    <div className="mini-chart">
+      {title && <strong>{title}</strong>}
+      <div className="mini-bars">
+        {data.slice(0, 10).map((item, index) => (
+          <span
+            key={`${item.label}-${index}`}
+            title={`${item.label}: ${item.value}`}
+            style={{ height: `${Math.max(8, (Number(item.value || 0) / max) * 100)}%` }}
+          />
+        ))}
+      </div>
+      <div className="chart-labels">
+        {data.slice(0, 4).map((item) => <small key={item.label}>{item.label}</small>)}
+      </div>
     </div>
   )
 }
 
-function TrendChart({ trend }) {
-  if (!trend.length) return <p className="muted">Run code a few times to see performance trends.</p>
-  return <MiniChart chart={{ type: "line", title: "Duration trend", data: trend.map((item) => ({ label: item.label, value: item.durationMs })) }} />
+function AnomalyList({ anomalies }) {
+  if (!anomalies.length) return <p className="muted">No anomalies detected.</p>
+  return (
+    <div className="anomalies">
+      {anomalies.map((item, index) => (
+        <article key={`${item.label}-${index}`}>
+          <strong>{item.label}</strong>
+          <span>{item.type}</span>
+          <p>{item.message}</p>
+        </article>
+      ))}
+    </div>
+  )
 }
 
-function ContributionBars({ users }) {
-  if (!users.length) return <p className="muted">Start editing to build contribution analytics.</p>
+function ActivityHeatmap({ rows }) {
+  const counts = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    count: rows.filter((row) => row.hour === hour).length
+  }))
+  const max = Math.max(...counts.map((item) => item.count), 1)
   return (
-    <div className="contribution-bars">
-      {users.map((user) => (
-        <div className="contribution" key={user.username}>
-          <div className="contribution-label">
+    <div className="heatmap">
+      {counts.map((item) => (
+        <span
+          key={item.hour}
+          title={`${item.hour}:00 - ${item.count} events`}
+          style={{ opacity: 0.2 + (item.count / max) * 0.8 }}
+        >
+          {item.hour}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function Metric({ label, value }) {
+  return (
+    <div className="metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  )
+}
+
+function Progress({ analytics }) {
+  const progress = analytics.progress || {}
+  return (
+    <>
+      <div className="progress-track">
+        <span style={{ width: `${progress.completionPercent || 0}%` }} />
+      </div>
+      <p className="muted">{progress.completionPercent || 0}% of {progress.targetWords || 1500} target words</p>
+      <div className="sections">
+        {(progress.sectionCompletion || []).map((section) => (
+          <div key={section.title}>
+            <strong>{section.title}</strong>
+            <small>{section.status} | {section.words} words</small>
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
+function Contributors({ contributors }) {
+  if (!contributors.length) return <p className="muted">No edits yet.</p>
+  return (
+    <div className="contributors">
+      {contributors.map((user) => (
+        <div key={user.username}>
+          <div>
             <span>{user.username}</span>
             <strong>{user.contributionPercent}%</strong>
           </div>
-          <div className="bar-track">
-            <span style={{ width: `${Math.max(user.contributionPercent, 4)}%`, background: user.color }} />
-          </div>
-          <small>{user.edits} edits | {user.editFrequency}/min | {user.linesTouched} lines</small>
+          <div className="bar"><span style={{ width: `${Math.max(user.contributionPercent, 4)}%`, background: user.color }} /></div>
+          <small>{user.edits} edits | {user.editFrequency}/min</small>
         </div>
       ))}
     </div>
   )
 }
 
-function VersionChanges({ changes }) {
-  if (!changes.length) return <p className="muted">No version changes yet.</p>
+function History({ history, onRollback }) {
+  if (!history.length) return <p className="muted">No snapshots yet.</p>
   return (
-    <div className="history-list">
-      {changes.map((change) => (
-        <article className="history-item" key={change.fileId}>
-          <div>
-            <strong>{change.path}</strong>
-            <span>{change.versions} versions | last by {change.latestAuthor}</span>
-          </div>
-          <small>{change.changeSize} chars changed</small>
-        </article>
-      ))}
-    </div>
-  )
-}
-
-function HistoryList({ history, onRestore }) {
-  if (!history.length) return <p className="muted">No saved versions yet.</p>
-  return (
-    <div className="history-list">
-      {history.slice().reverse().map((version) => (
-        <article className="history-item" key={version.id}>
+    <div className="history">
+      {history.slice().reverse().slice(0, 8).map((version) => (
+        <article key={version.id}>
           <div>
             <strong>{version.label}</strong>
-            <span>{version.path} | {version.author} | {new Date(version.createdAt).toLocaleTimeString()}</span>
+            <small>{version.author} | {version.words} words</small>
           </div>
-          <button type="button" onClick={() => onRestore(version)}>Restore</button>
+          <button type="button" onClick={() => onRollback(version.id)}>Rollback</button>
         </article>
       ))}
     </div>
   )
 }
 
-function toCsv(table) {
-  if (!table?.rows?.length) return ""
-  const escape = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`
-  return [table.columns.map(escape).join(","), ...table.rows.map((row) => table.columns.map((column) => escape(row[column])).join(","))].join("\n")
+function simpleFormat(latex) {
+  return latex
+    .split("\n")
+    .map((line) => line.trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
 }
 
-function chartToSvg(chart) {
-  if (!chart?.data?.length) return `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><text x="24" y="40">No chart data</text></svg>`
-  const values = chart.data.map((item) => Number(item.value)).filter(Number.isFinite)
-  const max = Math.max(...values, 1)
-  const bars = chart.data.slice(0, 12).map((item, index) => {
-    const height = (Number(item.value) / max) * 240
-    const x = 50 + index * 45
-    const y = 300 - height
-    return `<rect x="${x}" y="${y}" width="28" height="${height}" fill="#22c55e"/><text x="${x}" y="324" font-size="10" fill="#334155">${String(item.label).slice(0, 6)}</text>`
-  }).join("")
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#f8fafc"/><text x="24" y="34" font-size="18" font-family="Arial" fill="#0f172a">${chart.title}</text>${bars}</svg>`
+function extractDocument(latex) {
+  return matchOne(latex, /\\begin\{document\}([\s\S]*?)\\end\{document\}/) || latex
 }
 
-function downloadFile(name, content, type) {
-  const blob = new Blob([content], { type })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement("a")
-  link.href = url
-  link.download = name
-  link.click()
-  URL.revokeObjectURL(url)
+function parsePreviewSections(document) {
+  const withoutAbstract = document.replace(/\\begin\{abstract\}[\s\S]*?\\end\{abstract\}/g, "")
+  const parts = withoutAbstract.split(/\\section\*?\{([^}]+)\}/g)
+  const sections = []
+  for (let index = 1; index < parts.length; index += 2) {
+    sections.push({
+      title: parts[index],
+      body: parts[index + 1]
+        .split(/\n\s*\n/)
+        .map((item) => item.trim())
+        .filter((item) => item && !item.startsWith("\\"))
+    })
+  }
+  return sections
+}
+
+function cleanInline(text) {
+  return text
+    .replace(/\\cite\{([^}]+)\}/g, "[$1]")
+    .replace(/\\ref\{([^}]+)\}/g, "$1")
+    .replace(/\\[a-zA-Z]+(\[[^\]]+\])?(\{([^}]*)\})?/g, "$3")
+    .replace(/[{}]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function matchOne(text, pattern) {
+  return text.match(pattern)?.[1]?.trim()
+}
+
+function slug(text) {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-")
 }
 
 export default App
