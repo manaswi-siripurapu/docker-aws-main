@@ -326,7 +326,7 @@ function analyzeStructure(sections, latex) {
 }
 
 function analyzeProgress(session, sections, words) {
-  const targetWords = 1500
+  const targetWords = 2500
   const historyTrend = session.history.slice(-12).map((entry) => ({
     label: new Date(entry.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
     words: countWords(stripLatex(entry.latex))
@@ -507,7 +507,7 @@ function analyzeDocumentData({ session, sections, sentences, paragraphs, citatio
   const sentenceStats = numericSummary(sentenceLengths)
   const paragraphStats = numericSummary(paragraphLengths)
   const scoreParts = [
-    Math.min(100, Math.round((words / 1500) * 100)),
+    Math.min(100, Math.round((words / 2500) * 100)),
     Math.max(0, 100 - issueRows.filter((row) => row.severity === "error").length * 20 - issueRows.filter((row) => row.severity === "warning").length * 8),
     Math.max(0, 100 - Math.abs((sectionWordStats.max || 0) - (sectionWordStats.min || 0)) / Math.max(sectionWordStats.mean || 1, 1) * 30),
     citations.length ? Math.round((new Set(citations.filter((item) => bibItems.includes(item))).size / new Set(citations).size) * 100) : 85,
