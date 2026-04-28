@@ -764,6 +764,6 @@ app.use((req, res, next) => {
   next()
 })
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`Collaborative LaTeX analytics server is running on port ${PORT}`)
 })

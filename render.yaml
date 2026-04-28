@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: collaborative-latex-analytics
+    runtime: docker
+    plan: free
+    dockerfilePath: docker-aws-main/Dockerfile
+    dockerContext: docker-aws-main
+    healthCheckPath: /health
+    autoDeployTrigger: commit
